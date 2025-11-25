@@ -1,0 +1,7 @@
+{
+  "name": "Plant AI Doc",
+  "description": "An app to detect and manage plant nutritional deficiencies and diseases using AI analysis of images from your device camera, gallery, or a connected sensor.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
