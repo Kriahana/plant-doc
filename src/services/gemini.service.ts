@@ -1,4 +1,6 @@
 
+
+
 import { Injectable } from '@angular/core';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -25,7 +27,9 @@ export class GeminiService {
   }
 
   async analyzePlantImage(base64ImageData: string): Promise<AnalysisResult> {
-    const prompt = `Analyze this image of a plant. Identify any visible signs of nutritional deficiencies or diseases. Provide the name of the issue, a detailed description, and a bulleted list of recommended management or treatment steps. If the plant appears healthy, state that clearly and provide general care tips. Structure your response in the requested JSON format.`;
+    const prompt = `You must only accept real photographic images of trees or plants. Automatically reject any uploaded image that is animated, illustrated, cartoon-style, computer-generated, AI-generated, digitally drawn, or not representing a real-life physical plant. If the image is rejected, set "isHealthy" to false, "issueName" to "Invalid Image", "description" to "The uploaded image is not a real photograph of a plant. Please upload a clear, real-life photo.", and provide an empty array for "recommendations".
+
+If the image is a valid photograph of a plant, analyze it. Identify any visible signs of nutritional deficiencies or diseases. Provide the name of the issue and a detailed description. For the "recommendations", provide a list of very short, actionable bullet points. Each point must be a concise, direct instruction (e.g., "Apply a nitrogen-rich fertilizer," "Water twice a week," "Move to a sunnier location"). Do not include lengthy explanations or extra information in the recommendations. If the plant appears healthy, state that clearly and provide general care tips in the same concise, point-wise format. Structure your response in the requested JSON format.`;
 
     const imagePart = {
       inlineData: {
@@ -72,12 +76,28 @@ export class GeminiService {
         }
       });
       
+      if (!response.text) {
+        throw new Error('The AI model returned an empty response.');
+      }
+
       const jsonString = response.text.trim();
-      return JSON.parse(jsonString) as AnalysisResult;
+      const result = JSON.parse(jsonString) as AnalysisResult;
+
+      // Validate the structure of the AI's response
+      if (!result || typeof result.isHealthy !== 'boolean' || !result.issueName || !result.description || !Array.isArray(result.recommendations)) {
+        throw new Error('The AI model returned an invalid response format. Please try again.');
+      }
+
+      return result;
 
     } catch (error) {
       console.error('Error analyzing image with Gemini API:', error);
-      throw new Error('Failed to analyze the image. The AI model could not process the request.');
+       if (error instanceof Error && (error.message.includes('invalid response format') || error.message.includes('empty response'))) {
+        // Re-throw our custom validation error messages
+        throw error;
+      }
+      // Generic error for network/API issues
+      throw new Error('Failed to analyze the image. The AI model could not be reached or failed to process the request. Please check your connection and try again.');
     }
   }
 }

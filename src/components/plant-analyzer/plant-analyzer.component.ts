@@ -36,6 +36,7 @@ export class PlantAnalyzerComponent implements OnDestroy {
   // Data State
   imageBase64 = signal<string | null>(null);
   analysisResult = signal<AnalysisResult | null>(null);
+  lastFailedUpload = signal<{ base64: string; url: string } | null>(null);
 
   // State for 'live' mode
   isConnecting = signal(false);
@@ -76,6 +77,8 @@ export class PlantAnalyzerComponent implements OnDestroy {
         this.isAnalyzing.set(true);
     }
     this.error.set(null);
+    this.lastFailedUpload.set(null); // Clear previous failed state on new attempt
+
 
     try {
       const result = await this.geminiService.analyzePlantImage(base64String);
@@ -84,9 +87,19 @@ export class PlantAnalyzerComponent implements OnDestroy {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
       this.error.set(errorMessage);
+       if (this.mode() === 'upload') {
+        this.lastFailedUpload.set({ base64: base64String, url: imageUrl });
+      }
     } finally {
       this.isLoading.set(false);
       this.isAnalyzing.set(false);
+    }
+  }
+
+  retryAnalysis(): void {
+    const lastUpload = this.lastFailedUpload();
+    if (lastUpload) {
+      this.analyzeImage(lastUpload.base64, lastUpload.url);
     }
   }
   
@@ -167,6 +180,7 @@ export class PlantAnalyzerComponent implements OnDestroy {
     this.isConnecting.set(false);
     this.isConnected.set(false);
     this.latestSensorData.set(null);
+    this.lastFailedUpload.set(null);
   }
 
   triggerFileUpload(): void {
