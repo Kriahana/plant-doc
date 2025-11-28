@@ -1,0 +1,62 @@
+<div class="flex justify-center items-center">
+  <div class="w-full max-w-md bg-white p-8 rounded-2xl shadow-lg">
+    <div class="text-center mb-8">
+      <h2 class="text-3xl font-bold text-gray-800">Create an Account</h2>
+      <p class="text-gray-500 mt-2">Get started with your personal plant doctor.</p>
+    </div>
+
+    <form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
+      <div class="mb-4">
+        <label for="name" class="block text-gray-700 font-semibold mb-2">Full Name</label>
+        <input 
+          id="name" 
+          type="text" 
+          formControlName="name"
+          class="w-full px-4 py-2 border rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+          placeholder="e.g., Jane Doe">
+      </div>
+      
+      <div class="mb-4">
+        <label for="email" class="block text-gray-700 font-semibold mb-2">Email Address</label>
+        <input 
+          id="email" 
+          type="email" 
+          formControlName="email"
+          class="w-full px-4 py-2 border rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+          placeholder="e.g., jane.doe@example.com">
+      </div>
+
+      <div class="mb-6">
+        <label for="password" class="block text-gray-700 font-semibold mb-2">Password</label>
+        <input 
+          id="password" 
+          type="password" 
+          formControlName="password"
+          class="w-full px-4 py-2 border rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+          placeholder="6+ characters">
+      </div>
+      
+      @if (error()) {
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mb-6" role="alert">
+          <span class="block sm:inline">{{ error() }}</span>
+        </div>
+      }
+
+      <button 
+        type="submit" 
+        [disabled]="registerForm.invalid"
+        class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-full hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+        Create Account
+      </button>
+    </form>
+    
+    <div class="mt-6 text-center">
+      <p class="text-gray-600">
+        Already have an account? 
+        <button (click)="onGoToLogin()" class="font-semibold text-green-600 hover:underline">
+          Login
+        </button>
+      </p>
+    </div>
+  </div>
+</div>
