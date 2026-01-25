@@ -1,5 +1,6 @@
 import { Component, ChangeDetectionStrategy, output, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+// FIX: Import FormGroup and FormControl instead of FormBuilder.
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../services/auth.service';
 
@@ -14,15 +15,15 @@ export class RegisterComponent {
   registerSuccess = output<void>();
   goToLogin = output<void>();
 
-  private fb = inject(FormBuilder);
   private authService = inject(AuthService);
   
   error = signal<string | null>(null);
 
-  registerForm = this.fb.group({
-    name: ['', Validators.required],
-    email: ['', [Validators.required, Validators.email]],
-    password: ['', [Validators.required, Validators.minLength(6)]]
+  // FIX: Instantiate FormGroup and FormControl directly to avoid issues with FormBuilder injection in this environment.
+  registerForm = new FormGroup({
+    name: new FormControl('', [Validators.required]),
+    email: new FormControl('', [Validators.required, Validators.email]),
+    password: new FormControl('', [Validators.required, Validators.minLength(6)])
   });
 
   onSubmit(): void {

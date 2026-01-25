@@ -1,4 +1,5 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, inject } from '@angular/core';
+import { NotificationService } from './notification.service';
 
 export interface User {
   id: string;
@@ -10,6 +11,7 @@ export interface User {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   currentUser = signal<User | null>(null);
+  private notificationService = inject(NotificationService);
 
   constructor() {
     const usersJson = localStorage.getItem('users');
@@ -18,8 +20,14 @@ export class AuthService {
     // Create dummy user if not exists for easy testing
     if (!users.find(u => u.email === 'user')) {
         users.push({ id: this.generateId(), name: 'Test User', email: 'user', password: 'password123' });
-        localStorage.setItem('users', JSON.stringify(users));
     }
+    
+    // Create admin user if not exists for easy testing
+    if (!users.find(u => u.email === 'admin')) {
+        users.push({ id: this.generateId(), name: 'Admin User', email: 'admin', password: 'admin123' });
+    }
+
+    localStorage.setItem('users', JSON.stringify(users));
     
     // Check for a logged-in user from a previous session
     const currentUserJson = localStorage.getItem('currentUser');
@@ -35,6 +43,7 @@ export class AuthService {
       const { password: _, ...userToStore } = user; // Exclude password from session data
       this.currentUser.set(userToStore);
       localStorage.setItem('currentUser', JSON.stringify(userToStore));
+      this.notificationService.addNotification(`Welcome back, ${user.name}!`, 'success');
       return true;
     }
     return false;
@@ -53,13 +62,18 @@ export class AuthService {
     const { password: _, ...userToStore } = newUser;
     this.currentUser.set(userToStore);
     localStorage.setItem('currentUser', JSON.stringify(userToStore));
+    this.notificationService.addNotification(`Welcome, ${newUser.name}! Your account is ready.`, 'success');
 
     return { success: true };
   }
 
   logout(): void {
+    const user = this.currentUser();
     this.currentUser.set(null);
     localStorage.removeItem('currentUser');
+    if (user) {
+      this.notificationService.addNotification('You have been logged out.', 'info');
+    }
   }
 
   private getUsers(): User[] {

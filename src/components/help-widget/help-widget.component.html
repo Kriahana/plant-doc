@@ -1,0 +1,91 @@
+<!-- Floating Action Button -->
+<button 
+  (click)="toggleModal(true)"
+  title="Help & Support"
+  class="fixed bottom-6 right-6 bg-teal-600 text-white rounded-full p-4 shadow-lg hover:bg-teal-700 focus:outline-none focus:ring-4 focus:ring-teal-300 transition-transform transform hover:scale-110 z-30">
+  <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.546-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+</button>
+
+<!-- Modal -->
+@if (isModalOpen()) {
+  <div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+    <div class="fixed inset-0" (click)="toggleModal(false)"></div> <!-- Backdrop click to close -->
+    
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg z-50 relative overflow-hidden">
+      <!-- Header -->
+      <div class="p-5 border-b flex justify-between items-center">
+        <h3 class="text-2xl font-bold text-gray-800">Help & Support</h3>
+        <button (click)="toggleModal(false)" class="p-1 rounded-full text-gray-500 hover:bg-gray-200 hover:text-gray-800">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      <!-- Content -->
+      <div class="p-6">
+        @if (!submissionSuccess()) {
+          <form [formGroup]="helpForm" (ngSubmit)="onSubmit()">
+            <p class="text-gray-600 mb-6">
+              Need assistance or want to report an issue? Fill out the form below and our team will get back to you.
+            </p>
+            
+            <div class="mb-5">
+              <label for="subject" class="block text-gray-700 font-semibold mb-2">What is this about?</label>
+              <select 
+                id="subject"
+                formControlName="subject"
+                class="w-full px-4 py-2 border rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+                <option>General Question</option>
+                <option>Report a Bug / Crash</option>
+                <option>Feedback & Suggestions</option>
+                <option>Other</option>
+              </select>
+            </div>
+
+            <div class="mb-6">
+              <label for="message" class="block text-gray-700 font-semibold mb-2">Message</label>
+              <textarea
+                id="message"
+                formControlName="message"
+                rows="5"
+                class="w-full px-4 py-2 border rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                placeholder="Please provide as much detail as possible..."></textarea>
+              @if (helpForm.get('message')?.hasError('minlength') && helpForm.get('message')?.touched) {
+                <p class="text-red-600 text-sm mt-1">Please enter at least 10 characters.</p>
+              }
+            </div>
+            
+            <div class="flex justify-end">
+              <button 
+                type="submit" 
+                [disabled]="helpForm.invalid || isSubmitting()"
+                class="bg-teal-600 text-white font-bold py-3 px-6 rounded-full hover:bg-teal-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2">
+                @if (isSubmitting()) {
+                  <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span>Sending...</span>
+                } @else {
+                  <span>Send Message</span>
+                }
+              </button>
+            </div>
+          </form>
+        } @else {
+          <!-- Success State -->
+          <div class="text-center py-8">
+             <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+              <svg class="h-10 w-10 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-800">Thank You!</h3>
+            <p class="text-gray-600 mt-2 mb-6">Your message has been sent successfully. We'll be in touch soon.</p>
+            <button (click)="closeAndReset()" class="bg-gray-200 text-gray-800 font-bold py-3 px-6 rounded-full hover:bg-gray-300 transition-colors">
+              Close
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+}

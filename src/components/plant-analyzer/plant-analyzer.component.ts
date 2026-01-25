@@ -1,6 +1,7 @@
 import { Component, ChangeDetectionStrategy, input, signal, inject, output, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { GeminiService, AnalysisResult } from '../../services/gemini.service';
+import { NotificationService } from '../../services/notification.service';
 
 export interface PlantAnalysisEvent {
   result: AnalysisResult;
@@ -13,6 +14,17 @@ export interface SensorData {
   humidity: number;
   light: number;
 }
+
+export interface AnalysisQueueItem {
+  id: string;
+  file: File;
+  imageUrl: string; // Preview URL from createObjectURL
+  status: 'pending' | 'analyzing' | 'completed' | 'error';
+  progress?: number;
+  result?: AnalysisResult;
+  errorMessage?: string;
+}
+
 
 @Component({
   selector: 'plant-analyzer',
@@ -27,79 +39,154 @@ export class PlantAnalyzerComponent implements OnDestroy {
   newAnalysis = output<PlantAnalysisEvent>();
   
   private geminiService = inject(GeminiService);
+  private notificationService = inject(NotificationService);
 
-  // UI State
-  isLoading = signal(false);
-  isAnalyzing = signal(false); // For live mode background analysis
-  error = signal<string | null>(null);
-  
-  // Data State
-  imageBase64 = signal<string | null>(null);
-  analysisResult = signal<AnalysisResult | null>(null);
-  lastFailedUpload = signal<{ base64: string; url: string } | null>(null);
+  // --- State for 'upload' mode ---
+  analysisQueue = signal<AnalysisQueueItem[]>([]);
+  isProcessingQueue = signal(false);
+  private activeProgressInterval = signal<any>(null);
 
-  // State for 'live' mode
+  // --- State for 'live' mode ---
   isConnecting = signal(false);
   isConnected = signal(false);
+  isAnalyzing = signal(false); // For live mode background analysis
+  error = signal<string | null>(null);
+  imageBase64 = signal<string | null>(null);
+  analysisResult = signal<AnalysisResult | null>(null);
   latestSensorData = signal<SensorData | null>(null);
   private liveMonitoringInterval = signal<any>(null);
 
+
+  // --- Upload Mode Methods ---
 
   onFileSelected(event: Event): void {
     const element = event.currentTarget as HTMLInputElement;
     const fileList: FileList | null = element.files;
 
-    if (fileList && fileList[0]) {
-      const file = fileList[0];
-      this.resetState();
-      this.isLoading.set(true);
-      const reader = new FileReader();
-      reader.onload = (e: any) => {
-        const base64String = e.target.result.split(',')[1];
-        const imageUrl = e.target.result;
-        this.imageBase64.set(imageUrl); 
-        this.isLoading.set(false);
-        this.analyzeImage(base64String, imageUrl);
-      };
-      reader.onerror = () => {
-        this.isLoading.set(false);
-        this.error.set('Could not read the selected file.');
-      };
-      reader.readAsDataURL(file);
+    if (fileList && fileList.length > 0) {
+      const newItems: AnalysisQueueItem[] = Array.from(fileList).map(file => ({
+        id: `${Date.now()}-${Math.random()}`,
+        file,
+        imageUrl: URL.createObjectURL(file), // Create a temporary URL for preview
+        status: 'pending'
+      }));
+
+      this.analysisQueue.update(currentQueue => [...currentQueue, ...newItems]);
+      
+      this.processQueue(); // Kick off processing if not already running
     }
   }
 
-  async analyzeImage(base64String: string, imageUrl: string): Promise<void> {
-    if (this.mode() === 'upload') {
-        this.isLoading.set(true);
-        this.analysisResult.set(null);
-    } else {
-        this.isAnalyzing.set(true);
-    }
-    this.error.set(null);
-    this.lastFailedUpload.set(null); // Clear previous failed state on new attempt
+  async processQueue(): Promise<void> {
+    if (this.isProcessingQueue()) return;
 
+    this.isProcessingQueue.set(true);
+    let nextItemIndex = this.analysisQueue().findIndex(item => item.status === 'pending');
 
-    try {
-      const result = await this.geminiService.analyzePlantImage(base64String);
-      this.analysisResult.set(result);
-      this.newAnalysis.emit({ result, image: imageUrl, timestamp: new Date() });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-      this.error.set(errorMessage);
-       if (this.mode() === 'upload') {
-        this.lastFailedUpload.set({ base64: base64String, url: imageUrl });
+    while (nextItemIndex !== -1) {
+      this.analysisQueue.update(queue => {
+          const item = queue[nextItemIndex];
+          item.status = 'analyzing';
+          item.progress = 0;
+          return [...queue];
+      });
+
+      const itemToProcess = this.analysisQueue()[nextItemIndex];
+      
+      // Start Progress Simulation
+      const progressInterval = setInterval(() => {
+        this.analysisQueue.update(queue => {
+          const item = queue.find(i => i.id === itemToProcess.id);
+          if (item && item.status === 'analyzing' && item.progress !== undefined) {
+            const currentProgress = item.progress;
+            // Increment progress, but don't let it reach 100% until it's actually done.
+            const increment = currentProgress < 70 ? Math.random() * 8 : Math.random() * 2;
+            item.progress = Math.min(currentProgress + increment, 98); // Cap at 98%
+          }
+          return [...queue];
+        });
+      }, 400);
+      this.activeProgressInterval.set(progressInterval);
+
+      this.notificationService.addNotification(`Analyzing image: ${itemToProcess.file.name}`, 'info');
+
+      try {
+        const base64 = await this.readFileAsBase64(itemToProcess.file);
+        const result = await this.geminiService.analyzePlantImage(base64);
+
+        clearInterval(this.activeProgressInterval());
+        this.activeProgressInterval.set(null);
+
+        this.analysisQueue.update(queue => {
+            const item = queue.find(i => i.id === itemToProcess.id);
+            if (item) {
+               item.status = 'completed';
+               item.result = result;
+               item.progress = 100;
+            }
+            return [...queue];
+        });
+        this.newAnalysis.emit({ result, image: itemToProcess.imageUrl, timestamp: new Date() });
+        this.notificationService.addNotification(`Analysis complete for ${itemToProcess.file.name}.`, 'success');
+      } catch (err) {
+        clearInterval(this.activeProgressInterval());
+        this.activeProgressInterval.set(null);
+        
+        const friendlyErrorMessage = this.getFriendlyErrorMessage(err);
+        this.notificationService.addNotification(`Analysis failed for ${itemToProcess.file.name}.`, 'error');
+         this.analysisQueue.update(queue => {
+            const item = queue.find(i => i.id === itemToProcess.id);
+            if (item) {
+                item.status = 'error';
+                item.errorMessage = friendlyErrorMessage;
+                item.progress = 0;
+            }
+            return [...queue];
+        });
       }
-    } finally {
-      this.isLoading.set(false);
-      this.isAnalyzing.set(false);
+      
+      nextItemIndex = this.analysisQueue().findIndex(item => item.status === 'pending');
     }
+
+    this.isProcessingQueue.set(false);
   }
 
-  retryAnalysis(): void {
-    const lastUpload = this.lastFailedUpload();
-    if (lastUpload) {
-      this.analyzeImage(lastUpload.base64, lastUpload.url);
+  private readFileAsBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e: any) => {
+            const base64String = e.target.result.split(',')[1];
+            resolve(base64String);
+        };
+        reader.onerror = (error) => reject(new Error('Could not read the selected file.'));
+        reader.readAsDataURL(file);
+    });
+  }
+
+  retryItem(itemToRetry: AnalysisQueueItem): void {
+    this.analysisQueue.update(queue => {
+        const item = queue.find(i => i.id === itemToRetry.id);
+        if (item && item.status === 'error') {
+            item.status = 'pending';
+            item.errorMessage = undefined;
+            item.progress = 0;
+        }
+        return [...queue];
+    });
+    this.processQueue();
+  }
+
+  clearQueue(): void {
+    if (this.activeProgressInterval()) {
+      clearInterval(this.activeProgressInterval());
+      this.activeProgressInterval.set(null);
+    }
+    const itemCount = this.analysisQueue().length;
+    this.analysisQueue().forEach(item => URL.revokeObjectURL(item.imageUrl));
+    this.analysisQueue.set([]);
+    this.isProcessingQueue.set(false);
+    if(itemCount > 0) {
+      this.notificationService.addNotification('Analysis queue has been cleared.', 'info');
     }
   }
   
@@ -108,53 +195,69 @@ export class PlantAnalyzerComponent implements OnDestroy {
   connectToDevice(): void {
     this.resetState();
     this.isConnecting.set(true);
+    this.notificationService.addNotification('Connecting to farm sensor...', 'info');
     setTimeout(() => {
       this.isConnecting.set(false);
       this.isConnected.set(true);
+      this.notificationService.addNotification('Successfully connected to farm sensor.', 'success');
       this.startLiveMonitoring();
     }, 2500);
   }
 
   startLiveMonitoring(): void {
-    this.captureAndAnalyze(); // Analyze immediately on connect
-    const interval = setInterval(() => {
-        this.captureAndAnalyze();
-    }, 15000); // Capture and analyze every 15 seconds
+    this.captureAndAnalyze();
+    const interval = setInterval(() => this.captureAndAnalyze(), 15000);
     this.liveMonitoringInterval.set(interval);
   }
 
   async captureAndAnalyze(): Promise<void> {
-    // Simulate fetching sensor data
     this.updateSensorData();
-
-    // Simulate capturing an image
     const imageUrl = `https://picsum.photos/600/400?random=${Date.now()}`;
-    this.imageBase64.set(imageUrl); // Update image for live feed
+    this.imageBase64.set(imageUrl);
+    this.isAnalyzing.set(true);
+    this.error.set(null);
+    this.notificationService.addNotification('Capturing new image for live analysis.', 'info');
 
     try {
-        const res = await fetch(imageUrl);
-        const blob = await res.blob();
-        const reader = new FileReader();
-        reader.onload = (e: any) => {
-            const base64String = e.target.result.split(',')[1];
-            this.analyzeImage(base64String, imageUrl);
+      const res = await fetch(imageUrl);
+      const blob = await res.blob();
+      const reader = new FileReader();
+      reader.onload = async (e: any) => {
+        try {
+          const base64String = e.target.result.split(',')[1];
+          const result = await this.geminiService.analyzePlantImage(base64String);
+          this.analysisResult.set(result);
+          this.newAnalysis.emit({ result, image: imageUrl, timestamp: new Date() });
+          this.notificationService.addNotification(`Live analysis complete: ${result.issueName}.`, 'success');
+        } catch (err) {
+          const message = this.getFriendlyErrorMessage(err);
+          this.error.set(message);
+          this.notificationService.addNotification(message, 'error');
+        } finally {
+          this.isAnalyzing.set(false);
         }
-        reader.onerror = () => {
-            this.error.set('Failed to process captured image.');
-            this.isAnalyzing.set(false);
-        }
-        reader.readAsDataURL(blob);
-    } catch (err) {
-        this.error.set('Failed to capture image from live feed.');
+      }
+      reader.onerror = () => {
+        const message = 'Image Read Error: Failed to process the captured image from the live feed. The data might be corrupted.';
+        this.error.set(message);
+        this.notificationService.addNotification(message, 'error');
         this.isAnalyzing.set(false);
+      }
+      reader.readAsDataURL(blob);
+    } catch (err)
+      {
+      const message = 'Network Error: Failed to download the image from the live feed. Please check your internet connection.';
+      this.error.set(message);
+      this.notificationService.addNotification(message, 'error');
+      this.isAnalyzing.set(false);
     }
   }
 
   updateSensorData(): void {
     const data: SensorData = {
-      temperature: parseFloat((20 + Math.random() * 5).toFixed(1)), // 20-25 °C
-      humidity: Math.floor(50 + Math.random() * 20), // 50-70%
-      light: Math.floor(10000 + Math.random() * 5000) // 10k-15k lux
+      temperature: parseFloat((20 + Math.random() * 5).toFixed(1)),
+      humidity: Math.floor(50 + Math.random() * 20),
+      light: Math.floor(10000 + Math.random() * 5000)
     };
     this.latestSensorData.set(data);
   }
@@ -163,16 +266,43 @@ export class PlantAnalyzerComponent implements OnDestroy {
     if (this.liveMonitoringInterval()) {
         clearInterval(this.liveMonitoringInterval()!);
         this.liveMonitoringInterval.set(null);
+        this.notificationService.addNotification('Live monitoring stopped.', 'info');
     }
     this.resetState();
   }
 
+  // --- Component Lifecycle & General Methods ---
+
   ngOnDestroy(): void {
     this.stopMonitoring();
+    this.clearQueue();
+  }
+
+  private getFriendlyErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('offline')) {
+            return 'Network Offline: Please check your internet connection and try again.';
+        }
+        if (msg.includes('could not read the selected file')) {
+            return 'File Error: The image could not be read. It might be corrupted. Please try a different file.';
+        }
+        if (msg.includes('empty response')) {
+            return 'AI Error: The model returned an empty response. This can happen with unusual images. Please try again or use a different photo.';
+        }
+        if (msg.includes('invalid response format')) {
+            return 'AI Error: The model returned data in an unexpected format. This is often a temporary issue. Please try again.';
+        }
+        if (msg.includes('failed to analyze')) {
+            return 'Connection Error: Could not reach the AI model. Please check your internet connection and try again.';
+        }
+        return error.message;
+    }
+    return 'An unknown error occurred. Please try again.';
   }
 
   resetState(): void {
-    this.isLoading.set(false);
+    this.clearQueue();
     this.isAnalyzing.set(false);
     this.error.set(null);
     this.imageBase64.set(null);
@@ -180,7 +310,11 @@ export class PlantAnalyzerComponent implements OnDestroy {
     this.isConnecting.set(false);
     this.isConnected.set(false);
     this.latestSensorData.set(null);
-    this.lastFailedUpload.set(null);
+    
+    if (this.liveMonitoringInterval()) {
+        clearInterval(this.liveMonitoringInterval()!);
+        this.liveMonitoringInterval.set(null);
+    }
   }
 
   triggerFileUpload(): void {

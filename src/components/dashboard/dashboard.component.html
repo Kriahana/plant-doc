@@ -1,0 +1,167 @@
+<div class="max-w-4xl mx-auto">
+  <h2 class="text-3xl font-bold mb-6 text-center text-gray-800">Dashboard</h2>
+
+  <!-- Live Environmental Readings -->
+  <div class="mb-8">
+    <h3 class="text-xl font-bold text-gray-800 mb-4">Live Environmental Readings</h3>
+    @switch (sensorStatus()) {
+      @case ('loading') {
+        <div class="bg-white p-6 rounded-2xl shadow-lg text-center flex items-center justify-center">
+          <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-500"></div>
+          <p class="ml-3 text-gray-600 font-medium">Measuring your local environment...</p>
+        </div>
+      }
+      @case ('success') {
+        @if (environmentData(); as data) {
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <!-- Temperature -->
+            <div class="bg-white p-4 rounded-2xl shadow-lg text-center">
+              <h4 class="font-semibold text-gray-500 mb-2 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5.055a4.5 4.5 0 11-2 0V4a1 1 0 011-1zM8.5 15.5a2.5 2.5 0 115 0 2.5 2.5 0 01-5 0z" clip-rule="evenodd" /></svg>
+                <span class="ml-2">Temperature</span>
+              </h4>
+              @if (data.temperature !== null) {
+                <p class="text-4xl font-bold text-red-500">{{ data.temperature }}<span class="text-2xl">&deg;C</span></p>
+                <p class="text-xs text-gray-400 mt-1">Based on local forecast</p>
+              } @else {
+                <p class="text-gray-500 text-sm mt-4 pt-4">Could not be determined.</p>
+              }
+            </div>
+            <!-- Humidity -->
+            <div class="bg-white p-4 rounded-2xl shadow-lg text-center">
+              <h4 class="font-semibold text-gray-500 mb-2 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.738-1.987A3.5 3.5 0 0114.5 16h-9z" /></svg>
+                <span class="ml-2">Humidity</span>
+              </h4>
+              @if (data.humidity !== null) {
+                <p class="text-4xl font-bold text-blue-500">{{ data.humidity }}<span class="text-2xl">%</span></p>
+                <p class="text-xs text-gray-400 mt-1">Based on local forecast</p>
+              } @else {
+                <p class="text-gray-500 text-sm mt-4 pt-4">Could not be determined.</p>
+              }
+            </div>
+            <!-- Light Level -->
+            <div class="bg-white p-4 rounded-2xl shadow-lg text-center">
+              <h4 class="font-semibold text-gray-500 mb-2 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 14.464A1 1 0 106.465 13.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" clip-rule="evenodd" /></svg>
+                <span class="ml-2">Ambient Light</span>
+              </h4>
+              @if (data.light !== null) {
+                <p class="text-4xl font-bold text-yellow-500">{{ data.light }}<span class="text-2xl"> lux</span></p>
+                <p class="text-xs text-gray-400 mt-1">Measured from device sensor</p>
+              } @else {
+                <p class="text-gray-500 text-sm mt-4 pt-4">Sensor not available or permission denied.</p>
+              }
+            </div>
+          </div>
+        }
+      }
+      @case ('error') {
+        <div class="bg-red-50 border-l-4 border-red-500 text-red-800 p-4 rounded-lg shadow-md" role="alert">
+          <p class="font-bold">Could Not Read Environmental Data</p>
+          <p class="text-sm">{{ sensorError() }}</p>
+          <button (click)="loadEnvironmentalData()" class="mt-2 text-sm font-semibold text-red-900 underline hover:text-red-700">
+            Try Again
+          </button>
+        </div>
+      }
+    }
+  </div>
+
+  @if (totalAnalyses() > 0) {
+    <!-- STATS CARDS -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div class="bg-white p-6 rounded-2xl shadow-lg text-center">
+        <h3 class="text-lg font-semibold text-gray-500 mb-1">Total Analyses</h3>
+        <p class="text-5xl font-bold text-blue-600">{{ totalAnalyses() }}</p>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow-lg text-center">
+        <h3 class="text-lg font-semibold text-gray-500 mb-1">Healthy Plants</h3>
+        <p class="text-5xl font-bold text-green-600">{{ healthyCount() }}</p>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow-lg text-center">
+        <h3 class="text-lg font-semibold text-gray-500 mb-1">Issues Detected</h3>
+        <p class="text-5xl font-bold text-yellow-600">{{ unhealthyCount() }}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <!-- ISSUE BREAKDOWN -->
+      @if (issueDistribution().length > 0) {
+        <div class="bg-white p-6 rounded-2xl shadow-lg">
+          <h3 class="text-xl font-bold text-gray-800 mb-4">Issue Breakdown</h3>
+          <div class="space-y-4">
+            @for (issue of issueDistribution(); track issue.name) {
+              <div>
+                <div class="flex justify-between items-center mb-1">
+                  <span class="font-semibold text-gray-700">{{ issue.name }}</span>
+                  <span class="text-sm font-medium text-gray-500">{{ issue.count }}</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                  <div class="bg-yellow-500 h-2.5 rounded-full" [style.width.%]="(issue.count / maxIssueCount()) * 100"></div>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+       <!-- PLANT SPECIES BREAKDOWN -->
+      @if (plantDistribution().length > 0) {
+        <div class="bg-white p-6 rounded-2xl shadow-lg">
+          <h3 class="text-xl font-bold text-gray-800 mb-4">Plant Species</h3>
+          <div class="space-y-4">
+            @for (plant of plantDistribution(); track plant.name) {
+              <div>
+                <div class="flex justify-between items-center mb-1">
+                  <span class="font-semibold text-gray-700">{{ plant.name }}</span>
+                  <span class="text-sm font-medium text-gray-500">{{ plant.count }}</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                  <div class="bg-green-500 h-2.5 rounded-full" [style.width.%]="(plant.count / maxPlantCount()) * 100"></div>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- MOST RECENT ANALYSIS -->
+    @if (recentAnalysis(); as item) {
+      <div class="bg-white p-6 rounded-2xl shadow-lg mt-8">
+        <h3 class="text-xl font-bold text-gray-800 mb-4">Most Recent Analysis</h3>
+         <div class="flex flex-col md:flex-row items-start gap-4">
+            <img [src]="item.image" alt="Analyzed plant" class="w-full md:w-32 h-32 object-cover rounded-xl">
+            <div class="flex-1">
+              <div class="flex justify-between items-start mb-1">
+                 <div>
+                    <h3 class="font-bold text-lg text-gray-800">{{ item.result.plantName }}</h3>
+                    <p class="font-semibold" [class.text-green-700]="item.result.isHealthy" [class.text-yellow-700]="!item.result.isHealthy">
+                      {{ item.result.issueName }}
+                    </p>
+                  </div>
+                <span class="text-xs text-gray-500 shrink-0">{{ item.timestamp | date:'shortDate' }}</span>
+              </div>
+               @if(item.result.pestOrInsect !== 'None detected' && item.result.pestOrInsect !== 'N/A') {
+                <div class="flex items-center space-x-1 text-sm bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium my-2 max-w-max">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M15.707 4.293a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-5-5a1 1 0 011.414-1.414L10 8.586l4.293-4.293a1 1 0 011.414 0zm0 6a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-5-5a1 1 0 111.414-1.414L10 14.586l4.293-4.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                    <span>Pest/Insect: {{ item.result.pestOrInsect }}</span>
+                </div>
+              }
+              <p class="text-sm text-gray-600 line-clamp-2 mt-1">{{ item.result.description }}</p>
+            </div>
+          </div>
+      </div>
+    }
+
+  } @else {
+    <div class="text-center bg-white p-8 rounded-2xl shadow-lg">
+      <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+      <h3 class="mt-2 text-xl font-medium text-gray-900">No Data Yet</h3>
+      <p class="mt-1 text-gray-500">Perform an analysis to see your dashboard here.</p>
+    </div>
+  }
+</div>
